@@ -1,18 +1,8 @@
 const express = require("express");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 const router = express.Router();
 const Book = require("../models/book");
 const Author = require("../models/author");
 const imageMimeTypes = ["image/jpeg", "image/png", "image/gif"];
-const uploadPath = path.join("public", Book.coverBasePath);
-const upload = multer({
-    dest: uploadPath,
-    fileFilter: (req, file, callback) => {
-        callback(null, imageMimeTypes.includes(file.mimetype)); 
-    }
-})
 
 router.get("/", async (req, res) => {
     let query = Book.find();
@@ -40,26 +30,20 @@ router.get("/new", async (req, res) => {
     renderNewBookPage(res, new Book());
 });
 
-router.post("/", upload.single("cover"), async (req, res) => {
-    const fileName = req.file == null ? null : req.file.filename;
+router.post("/", async (req, res) => {
     const book = new Book({
         title: req.body.title,
         author: req.body.author,
         description: req.body.description,
         publishDate: new Date(req.body.publishDate),
         pageCount: req.body.pageCount,
-        coverName: fileName
     })
+    saveCover(book, req.body.cover);
     try {
         const newBook = await book.save();
         // res.redirect(`books/${ newBook.id }`);
         res.redirect("/books");
     } catch {
-        if (book.coverName != null) {
-            fs.unlink(path.join(uploadPath, book.coverName), err => {
-                if (err) console.error(err);
-            })
-        }
         renderNewBookPage(res, book, true);
     }
 });
@@ -72,6 +56,14 @@ async function renderNewBookPage(res, book, hasErr = false) {
         res.render("books/new", params);
     } catch {
         res.redirect("/books");
+    }
+}
+function saveCover(book, coverEncoded) {
+    if (coverEncoded == null) return;
+    const cover = JSON.parse(coverEncoded);
+    if (cover != null && imageMimeTypes.includes(cover.type)) {
+        book.coverImage = new Buffer.from(cover.data, "base64");
+        book.coverType = cover.type;
     }
 }
 
